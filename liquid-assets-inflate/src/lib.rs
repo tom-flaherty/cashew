@@ -1,6 +1,6 @@
 #![no_std]
 
-pub use liquid_assets_inflate_proc_macro::include_assets;
+pub use liquid_assets_inflate_macros::include_assets;
 
 /// The Decompressor trait should be implemented on a struct and can be passed
 /// to assets to decompress into a buffer
