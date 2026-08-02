@@ -6,7 +6,7 @@ use liquid_assets_deflate::{Compressor, TargetColorFormat, build_assets};
 /// Implementation of the miniz_oxide compression library
 /// Very high compression ratio, and slightly slower than lzss
 #[allow(unused)]
-struct MinizOxideCompressor {}
+struct MinizOxideCompressor;
 impl Compressor for MinizOxideCompressor {
     // The compression is infallible
     type Error = ();
@@ -56,7 +56,7 @@ impl<const N: usize> Compressor for LzssCompressor<N> {
 /// Implementation with no compression, for comparison
 /// You may find that loading from flash memory is actually taking up a lot of time
 #[allow(unused)]
-struct NoCompressor {}
+struct NoCompressor;
 impl Compressor for NoCompressor {
     type Error = ();
 
