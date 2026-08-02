@@ -1,6 +1,6 @@
 [package]
 name = "liquid-assets-inflate"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 
 description = "no-std library for embedded devices to decompress graphical assets compressed with liquid-assets-deflate"

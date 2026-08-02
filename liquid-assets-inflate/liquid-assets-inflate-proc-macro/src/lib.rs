@@ -366,11 +366,11 @@ fn define_module_types() -> proc_macro2::TokenStream {
                 }
             }
             #[doc = "Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote"]
-            pub fn copy_compressed_frame_data_to_buffer<D: Decompressor>(
+            pub fn copy_compressed_frame_data_to_buffer(
                 &self,
                 frame_number: usize,
                 buffer: &mut [u8; N],
-            ) -> Result<usize, Error<<D as Decompressor>::Error>> {
+            ) -> Result<usize, Error<()>> {
                 if frame_number < self.frames.len() {
                     let source_bytes = self.frames[frame_number as usize];
                     buffer[..source_bytes.len()].copy_from_slice(source_bytes);
