@@ -2,43 +2,60 @@
 
 `liquid-assets` is an assets pipeline for embedded Rust. It has two parts:
 
-- `liquid-assets-deflate` is used in build.rs compress source images into binaries.
+- `liquid-assets-deflate` is used in build.rs to convert the images into the required image format and then compress source images into binaries.
 - `liquid-assets-inflate` provides a macro which loads these images and provides easy methods for decompressing them.
 
-## What problem does it solve?
+## Assets directory structure
 
-You could use a python script to convert the images into `.bin` files, and then load each binary into a slice:
+All the assets must be placed inside a directory and organised correctly.
+All image files must already be the correct resolution (but do not have to be in the correct colour format).
+These conditions must be met:
 
-```rust
-const ANIMATION_DATA: &[&[u8]] = &[
-    include_bytes!("path/frame1.bin"),
-    include_bytes!("path/frame2.bin"),
-    include_bytes!("path/frame3.bin"),
-    include_bytes!("path/frame4.bin"),
-    include_bytes!("path/frame5.bin"),
-    ... // Rinse and repeat many times
-];
+- All assets should be named in snake case. This is because a Rust variable will be generated with the name of the asset.
+- Images for static assets can be placed directly in the assets directory.
+- For each animation, a directory should be created in the assets directory and named with the animation name. The animation directory should contain the frame images.
+- The naming of the frame images is pretty flexible, but must end with the frame number.
+- The first frame must be frame 1 (not frame 0!).
+- There cannot be any missing frame numbers.
+
+Example layout with 4 static assets and 2 animations:
+
+```
+├── company_logo.png
+├── warning.png
+├── connected.png
+├── disconnected.png
+├── loading
+│   ├── frame_0001.png
+│   ├── frame_0002.png
+│   ├── frame_0003.png
+│   ├── frame_0004.png
+│   ├── frame_0005.png
+│   └── frame_0006.png
+└── connection_success
+    ├── frame_0001.png
+    ├── frame_0002.png
+    ├── frame_0003.png
+    ├── frame_0004.png
+    ├── frame_0005.png
+    ├── frame_0006.png
+    ├── frame_0007.png
+    └── frame_0008.png
 ```
 
-This is very repetitive, and if the assets need to be changed then this need to be rewritten.
+## Compressing assets using `liquid-assets-deflate`
 
-`liquid_assets` provides a pipeline which automates the compression and decompression of assets.
-
-`liquid_assets_deflate` provides the `build_assets` function which can be placed in `build.rs`, and will compress assets into .bin files. The user has to implement the `Compressor` trait, to implement a compression library. Some example implementations of this trait are included in /example/build.rs.
-
-`liquid_assets_inflate` provides the `include_assets` macro, which automates adding 
-
-## Quick Example
-
-Add `build_assets` to build.rs, providing a compression implementation and the source/target directories.
+Firstly, a compression method must be implemented in `build.rs` using the `Compressor` trait.
+There are some [example implementations](https://github.com/tom-flaherty/liquid-assets/blob/master/example/build.rs) provided for the [miniz oxide](https://crates.io/crates/miniz_oxide) compression library, the [lzss](https://crates.io/crates/lzss) compression library, and a no-compression implementation.
+In most cases 
+The trait simply wraps a compression library.
 
 ```rust
-use liquid_assets_deflate::build_assets;
+// Example implementatino of the compressor trait for miniz oxide
 struct MinizOxideCompressor {}
 impl Compressor for MinizOxideCompressor {
     // The compression is infallible
     type Error = ();
-
     fn compress(&mut self, input_bytes: &[u8]) -> Result<Vec<u8>, Self::Error> {
         const COMPRESSION_LEVEL: u8 = 5;
         Ok(miniz_oxide::deflate::compress_to_vec(
@@ -47,88 +64,187 @@ impl Compressor for MinizOxideCompressor {
         ))
     }
 }
-fn main() {
-    let mut compressor = MinizOxideCompressor {};
-    build_assets(
-        "./assets", // Source directory for assets
-        "./asset-binaries", // Target directory for binaries
-        TargetColorFormat::Rgb565, // Images will be converted to this colour format
-        &mut compressor, // Pass a reference to the compressor
-    );
-    ... // Rest of build.rs
 ```
 
-This will rebuild the assets whenever the assets source directory changes, or if the user runs `REBUILD_ASSETS=1 cargo build`.
+Note that as this is running in `build.rs` it can use the standard library as it does not run on-target.
 
-Next, to load these animations in the embedded Rust code, call the `include_assets!` macro which is provided by `liquid_assets_inflate`.
+Also note that depending on the speed of the target flash memory, load times may not be better when using no compression.
+In some circumstances it will be quicker to load a small amount of memory and decompress it than to load a large amount of uncompressed memory.
+
+Finally, call `build_assets` in `build.rs`. Here is an example:
 
 ```rust
-use liquid_assets_inflate::include_assets;
-const BUFFER_SIZE: usize = 135 * 135 * 2;
-include_assets!("asset-binaries", BUFFER_SIZE);
+use liquid_assets_deflate::{Compressor, TargetColorFormat, build_assets};
+
+struct MinizOxideCompressor {}
+impl Compressor for MinizOxideCompressor { ... }
 
 fn main() {
-    ... // Embedded setup here
+    let mut compressor = MinizOxideCompressor {};
 
-    // Decompress a static asset
-    let DecompressedData {
-        bytes_wrote,
-        width,
-        height,
-    } = assets::ESPRESSIF
-        .decompress(&mut buffer, &decompressor)
-        .unwrap();
-    // You can now access the image as a slice of the buffer
-    let data = buffer[..bytes_wrote];
-    // It's up to the user to convert this into something that the display driver can use
-
-    // You can also decompress animations as an iterator
-    for (frame_index, frame) in assets::GITHUB.as_iter().enumerate() {
-        let DecompressedData {
-            bytes_wrote,
-            width,
-            height,
-        } = frame.decompress(&mut buffer, &decompressor).unwrap();
-        // Then display the frame
-        // Then add a delay to maintain a steady framerate
-    }
-    ...
+    build_assets(
+        "./assets", // The assets source directory
+        "./asset-binaries", // The destination for compiled asset binaries
+        TargetColorFormat::Rgb565, // The colour format of the display (currently only RGB565 is supported)
+        &mut compressor, // Mutable reference to the compressor
+    );
+    // ... the rest of the build file
 }
 ```
 
-The `include_assets` macro will expand to something like this:
+When the source directory is changed the assets will be rebuilt automatically.
+The assets will also be rebuilt if another part of `build.rs` needs to be rerun, which may increase compilation times.
+The user can also force the assets to be rebuilt: `REBUILD_ASSETS=1 cargo run`
+
+## Decompressing assets using `liquid-assets-inflate`
+
+The biggest timesaver when using `liquid-assets` is in the decompression of the assets.
+
+First, the user must implement the `Decompressor` trait, using the same compression library as for the `Compressor` trait implementation.
+There are some [example](https://github.com/tom-flaherty/liquid-assets/blob/master/example/src/decompressors.rs) implementation of the `Decompressor` traits, which can be copied for other projects.
+
+```rust
+pub struct MinizOxideDecompressor {}
+impl Decompressor for MinizOxideDecompressor {
+    // Wraps to the compression library error
+    type Error = miniz_oxide::inflate::TINFLStatus;
+
+    fn decompress<const N: usize>(
+        &self,
+        buffer: &mut [u8; N],
+        compressed_data: &[u8],
+    ) -> Result<usize, Self::Error> {
+        miniz_oxide::inflate::decompress_slice_iter_to_slice(
+            buffer,
+            core::iter::once(compressed_data),
+            false,
+            false,
+        )
+    }
+}
+```
+
+A fixed length decompression buffer should be created, which must be big enough to contain the largest asset.
+
+Invoke the `include_assets` macro, providing the directory for the assets binaries which were created by `liquid-assets-deflate`, and the size of the decompression buffer.
+
+```rust
+const BUFFER_SIZE: usize = 135 * 135 * 2;
+liquid_assets_inflate::include_assets!("asset-binaries", BUFFER_SIZE);
+```
+
+This macro will generate a module called `assets`, which contains all the compressed data stored as `const`.
+To see exactly what this will module look like, please see the appendix.
+
+In summary, the module contains the following:
+
+| Item                      | Type       | Usage                                                                                                                           |
+|---------------------------|------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `Error`                   | `enum`     | Error type for decompression methods. Can map to the compression crate error type.                                              |
+| `DecompressedData`        | `struct`   | Returned by decompression methods on success. Stores the number of bytes written to the buffer, and the asset width and height. |
+| `StaticAsset`             | `struct`   | Stores data relating to a static asset. See the section below for more detail.                                                  |
+| `AnimatedAsset`           | `struct`   | Stores data relating to an animation. See the section below for more detail.                                                    |
+| `FrameIterator`           | `struct`   | Can be obtained from an `AnimatedAsset` to iterate over the frames in an animation.                                             |
+| `get_all_static_assets`   | `const fn` | Returns a slice of all `StaticAsset`s, which may be useful when running benchmarks.                                             |
+| `get_all_animated_assets` | `const fn` | Returns a slice of all `AnimatedAsset`s, which may be useful when running benchmarks.                                           |
+
+### `StaticAsset` overview
+
+The following methods are implemented for `StaticAsset`:
+
+| Method                         | Parameters                                                                                                    | Return Type                                                  | Usage                                                                                      |
+|--------------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| `const fn get_compressed_data` | N/A                                                                                                           | `&'static [u8]`                                              | Returns slice of bytes for the compressed data for the asset                               |
+| `const fn width`               | N/A                                                                                                           | `u16`                                                        | Returns the width of the image in pixels                                                   |
+| `const fn height`              | N/A                                                                                                           | `u16`                                                        | Returns the height of the image in pixels                                                  |
+| `fn decompress`                | Mutable reference to the decompression buffer, reference to the struct implementing the `Decompressor` trait` | `Result<DecompressedData, Error<<D as Decompressor>::Error>` | Attempts to decompresses the asset and return a `DecompressedData`. May return an `Error`` |
+
+### `AnimatedAsset` overview
+
+The following methods are implemented for `AnimatedAsset`:
+
+
+
+## What are the advantages of using this library?
+
+- It's easy to add and remove assets, and compressing them does not require explicitly calling another script.
+- As macros are used to include the compiled asset binaries, the user doesn't need to manually update the `include_bytes!()` calls every time (huge timesaver!). The macros do lots of work to make this easier.
+
+## What are the disadvantages of using this library?
+
+- If another part of build.rs needs to be reran then all the assets will be recompiled, which adds to compile time.
+- For projects with lots of assets, it's better to use external flash memory rather than including the assets in the main binary, as the binary size will bloat and cause long flash times.
+
+## What about text?
+
+This crate doesn't support text as there are already crates which do this effectively.
+The `embedded-graphics` library includes some mono-space fonts.
+For non-mono text, [minitype](https://crates.io/crates/minitype) can be used to generate bitmaps from font files.
+
+## Appendix
+
+### `include_assets` macro expansion
+
+Some repetitive parts have been replaced with `...`
 
 ```rust
 pub mod assets {
     use liquid_assets_inflate::Decompressor;
+    ///Errors which may be returned by decompression methods. Errors may originate from the compression crate
     pub enum Error<DecompressionError> {
         Decompression(DecompressionError),
         UnexpectedSize,
         FrameOutOfRange,
     }
+    ///Returned by decompression functions
     pub struct DecompressedData {
+        ///The number of bytes wrote to the buffer
         pub bytes_wrote: usize,
+        ///The width of the image
         pub width: u16,
+        ///The height of the image
         pub height: u16,
     }
+    ///A static (non-animated) asset
     pub struct StaticAsset {
         data: &'static [u8],
         width: u16,
         height: u16,
     }
     impl StaticAsset {
-        /// Get the compressed data as a slice
-        pub const fn get_comressed_data(&self) -> &'static [u8] { /* ... */ }
-        /// Get the width of the image in pixels
-        pub const fn width(&self) -> u16 { self.width }
-        /// Get the height of the image in pixels
-        pub const fn height(&self) -> u16 { self.height }
-        /// Decompress the asset to the buffer by passing a Decompressor
+        ///Get the compressed data as a slice
+        pub const fn get_comressed_data(&self) -> &'static [u8] {
+            self.data
+        }
+        ///Get the width of the image in pixels
+        pub const fn width(&self) -> u16 {
+            self.width
+        }
+        ///Get the height of the image in pixels
+        pub const fn height(&self) -> u16 {
+            self.height
+        }
+        ///Decompress the asset to the buffer by passing a Decompressor
         pub fn decompress<const N: usize, D: Decompressor>(
             &self,
             buffer: &mut [u8; N],
             decompressor: &D,
-        ) -> Result<DecompressedData, Error<<D as Decompressor>::Error>> { /* ... */ }
+        ) -> Result<DecompressedData, Error<<D as Decompressor>::Error>> {
+            let bytes_wrote = decompressor
+                .decompress(buffer, self.data)
+                .map_err(|e| Error::Decompression(e))?;
+            const BYTES_PER_PIXEL: usize = 2;
+            if bytes_wrote
+                != (self.width as usize) * (self.height as usize) * BYTES_PER_PIXEL
+            {
+                return Err(Error::UnexpectedSize);
+            }
+            Ok(DecompressedData {
+                bytes_wrote,
+                width: self.width,
+                height: self.height,
+            })
+        }
     }
     ///An animated asset, which is a collection of frames (images) with the same dimensions
     pub struct AnimatedAsset<const N: usize> {
@@ -137,119 +253,155 @@ pub mod assets {
         height: u16,
     }
     impl<const N: usize> AnimatedAsset<N> {
-        /// Get the total number of frames in the animation
-        pub const fn get_number_of_frames(&self) -> usize { /* ... */ }
-        /// Get the width of the frames in pixels
-        pub fn width(&self) -> u16 { self.width }
-        /// Get the height of the frames in pixels
-        pub fn height(&self) -> u16 { self.height }
-        /// Decompress a single frame into a buffer by passing a Decompressor. Returns an error if the frame is out of range
+        ///Get the total number of frames in the animation
+        pub const fn get_number_of_frames(&self) -> usize {
+            self.frames.len()
+        }
+        ///Get the width of the frames in pixels
+        pub fn width(&self) -> u16 {
+            self.width
+        }
+        ///Get the height of the frames in pixels
+        pub fn height(&self) -> u16 {
+            self.height
+        }
+        ///Decompress a single frame into a buffer by passing a Decompressor. Returns an error if the frame is out of range
         pub fn decompress_frame<D: Decompressor>(
             &self,
             frame_number: usize,
             buffer: &mut [u8; N],
             decompressor: &D,
-        ) -> Result<usize, Error<<D as Decompressor>::Error>> { /* ... */ }
-        /// Get the compressed data for a frame. Retuns error if the frame is out of range
+        ) -> Result<DecompressedData, Error<<D as Decompressor>::Error>> {
+            if frame_number >= self.frames.len() {
+                return Err(Error::FrameOutOfRange);
+            }
+            let bytes_wrote = decompressor
+                .decompress(buffer, self.frames[frame_number])
+                .map_err(|e| Error::Decompression(e))?;
+            const BYTES_PER_PIXEL: usize = 2;
+            if bytes_wrote
+                != (self.width as usize) * (self.height as usize) * BYTES_PER_PIXEL
+            {
+                return Err(Error::UnexpectedSize);
+            }
+            Ok(DecompressedData {
+                bytes_wrote,
+                width: self.width,
+                height: self.height,
+            })
+        }
+        ///Get the compressed data for a frame. Retuns error if the frame is out of range
         pub fn get_compressed_frame_data(
             &self,
             frame_number: usize,
-        ) -> Result<&'static [u8], Error<()>> { /* ... */ }
-        /// Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote
+        ) -> Result<&'static [u8], Error<()>> {
+            if frame_number < self.frames.len() {
+                Ok(self.frames[frame_number])
+            } else {
+                Err(Error::FrameOutOfRange)
+            }
+        }
+        ///Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote
         pub fn copy_compressed_frame_data_to_buffer<D: Decompressor>(
             &self,
             frame_number: usize,
             buffer: &mut [u8; N],
-        ) -> { /* ... */ }
-        /// Access the animation as a FrameIterator (this method uses references so doesn't duplicate data)
-        pub fn as_iter(&self) -> FrameIterator { /* ... */ }
+        ) -> Result<usize, Error<<D as Decompressor>::Error>> {
+            if frame_number < self.frames.len() {
+                let source_bytes = self.frames[frame_number as usize];
+                buffer[..source_bytes.len()].copy_from_slice(source_bytes);
+                Ok(source_bytes.len())
+            } else {
+                Err(Error::FrameOutOfRange)
+            }
+        }
+        ///Access the animation as a FrameIterator (this method uses references so doesn't duplicate data)
+        pub fn as_iter(&self) -> FrameIterator {
+            FrameIterator::new(self.frames, self.width, self.height)
+        }
     }
+    ///Access the animation as a FrameIterator. This returns each frame in the animation as a static asset. Can be used with the syntax `for frame in assets::ANIMATION.as_iter() {...}`
     pub struct FrameIterator {
         frames: &'static [&'static [u8]],
         width: u16,
         height: u16,
         current_frame: usize,
     }
-    impl FrameIterator { /* ... */ }
-    impl Iterator for FrameIterator { /* ... */ }
-
-    // All your assets will then be defined. Here we only have two examples:
-
-    pub const COMPANY_LOGO: StaticAsset = StaticAsset {
-        data: include_bytes!("assets_directory/company_logo.bin")
-        width: 128,
-        height: 128,
-    };
-    pub const LOADING_ANIMATION: AnimatedAsset<{ super::BUFFER_SIZE }> = AnimatedAsset {
+    impl FrameIterator {
+        pub fn new(frames: &'static [&'static [u8]], width: u16, height: u16) -> Self {
+            Self {
+                frames,
+                width,
+                height,
+                current_frame: 0,
+            }
+        }
+    }
+    impl Iterator for FrameIterator {
+        type Item = StaticAsset;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.current_frame < self.frames.len() {
+                let data = self.frames[self.current_frame];
+                self.current_frame += 1;
+                Some(StaticAsset {
+                    data,
+                    width: self.width,
+                    height: self.height,
+                })
+            } else {
+                None
+            }
+        }
+    }
+    pub const CONNECTION_SUCCESS: AnimatedAsset<{ super::BUFFER_SIZE }> = AnimatedAsset {
         frames: &[
-            include_bytes!("assets_directory/loading_animation/frame1.bin"),
-            include_bytes!("assets_directory/loading_animation/frame2.bin"),
-            /* ... plus all the rest of the frames */
+            include_bytes(...).as_slice(),
+            include_bytes(...).as_slice(),
+            include_bytes(...).as_slice(),
+            ...
         ],
-        width: 135,
-        height: 135,
+        width: 135u16,
+        height: 135u16,
     };
-
-    pub const fn get_all_static_assets() -> &'static [&'static StaticAsset] { /*...*/ }
-    pub const fn get_all_animated_assets() -> &'static [&'static AnimatedAsset<{ super::BUFFER_SIZE }>] { /*...*/ }
+    pub const LOADING: AnimatedAsset<{ super::BUFFER_SIZE }> = AnimatedAsset {
+        frames: &[
+            include_bytes(...).as_slice(),
+            include_bytes(...).as_slice(),
+            include_bytes(...).as_slice(),
+            ...
+        ],
+        width: 135u16,
+        height: 135u16,
+    };
+    pub const COMPANY_LOGO: StaticAsset = StaticAsset {
+        data: include_bytes(...).as_slice(),
+        width: 128u16,
+        height: 128u16,
+    };
+    pub const WARNING: StaticAsset = StaticAsset {
+        data: include_bytes(...).as_slice(),
+        width: 128u16,
+        height: 128u16,
+    };
+    pub const CONNECTED: StaticAsset = StaticAsset {
+        data: include_bytes(...).as_slice(),
+        width: 128u16,
+        height: 128u16,
+    };
+    pub const DISCONNECTED: StaticAsset = StaticAsset {
+        data: include_bytes(...).as_slice(),
+        width: 128u16,
+        height: 128u16,
+    };
+    ///Retuns a slice containing all StaticAsset structs defined in the assets module
+    pub const fn get_all_static_assets() -> &'static [&'static StaticAsset] {
+        &[&COMPANY_LOGO, WARNING, CONNECTED, DISCONNECTED].as_slice()
+    }
+    ///Returns a slice containing all AnimatedAsset structs defined in the assets module
+    pub const fn get_all_animated_assets() -> &'static [&'static AnimatedAsset<
+        { super::BUFFER_SIZE },
+    >] {
+        &[&CONNECTED, &LOADING].as_slice()
+    }
 }
 ```
-
-Note that in the Cargo.toml `liquid-assets-inflate` is added to `[dependencies]` and `liquid-assets-deflate` is added to `[build-dependencies]`.
-
-```
-[dependencies]
-liquid-assets-inflate = { git = "git@github.com:tom-flaherty/liquid-assets.git", version = "0.3.0" }
-[build-dependencies]
-liquid-assets-deflate = { git = "git@github.com:tom-flaherty/liquid-assets.git", version = "0.3.0" }
-```
-
-## Assets Directory Format
-
-In the following example, `espressif` is a static asset, whereas `github` and `loading` are animations. Images must already be the desired size. Frames must be named `snake_case` with a numeric suffix starting with 1.
-
-```
-assets
-├── espressif.png
-├── github
-│   ├── frame_0001.png
-│   ├── frame_0002.png
-│   └── ...
-└── loading
-    ├── frame_0001.png
-    ├── frame_0002.png
-    └── ...
-```
-
-To use `liquid-assets`, first add `liquid-assets-deflate` to the `[dev-dependencies]` of your Cargo.toml.
-
-# Long Term TODO
-
-- The compression code could be refactored to use more structs, which may improve readablility
-- Remove "... as u16" from compression code
-- Support for displays other using colour formats other than RGB565
-- Support for transparency
-- Add a way to build assets without adding to build.rs
-- Support for bitmaps?
-- Prevent unwanted rebuilds
-- Only rebuild the specific assets that changed (this would add a lot of complexity)
-
-## Licence
-
-This software is provided under the MIT Licence (see LICENCE file). If you find this project helpful, please give the repo a star.
-
-## Contributing
-
-Please raise an issue on github to discuss changes.
-
-## Other notes
-
-Only tested on Linux.
-
-You can convert a gif to frames using:
-
-`ffmpeg -i mygif.gif frame_%04d.png`
-
-Or to also resize:
-
-`ffmpeg -i mygif.gif -vf scale=128:128 frame_%04d.png`

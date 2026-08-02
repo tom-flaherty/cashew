@@ -1,0 +1,3 @@
+Structs implementing the Compressor trait should be unit structs
+
+width and height methods in animated assets should be const functions

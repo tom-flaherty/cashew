@@ -3,5 +3,11 @@ name = "liquid-assets-inflate"
 version = "0.3.1"
 edition = "2024"
 
+description = "no-std library for embedded devices to decompress graphical assets compressed with liquid-assets-deflate"
+homepage = "https://github.com/tom-flaherty/liquid-assets"
+repository = "https://github.com/tom-flaherty/liquid-assets"
+license = "MIT"
+readme = "README.md"
+
 [dependencies]
 liquid-assets-inflate-proc-macro = { path = "./liquid-assets-inflate-proc-macro" }

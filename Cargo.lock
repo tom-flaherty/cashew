@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "liquid-assets-deflate"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "image",
  "miniz_oxide 0.9.1",
