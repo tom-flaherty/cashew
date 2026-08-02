@@ -8,6 +8,8 @@ homepage = "https://github.com/tom-flaherty/liquid-assets"
 repository = "https://github.com/tom-flaherty/liquid-assets"
 license = "MIT"
 readme = "README.md"
+keywords = ["embedded", "graphics", "assets", "pipeline", "compression"]
+categories = ["embedded", "no-std"]
 
 [dependencies]
 image = "0.25.10"

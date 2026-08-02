@@ -8,6 +8,7 @@ homepage = "https://github.com/tom-flaherty/liquid-assets"
 repository = "https://github.com/tom-flaherty/liquid-assets"
 license = "MIT"
 readme = "README.md"
+keywords = ["embedded", "graphics", "assets", "pipeline", "compression"]
 
 [dependencies]
-# liquid-assets-inflate-proc-macro = { path = "./liquid-assets-inflate-proc-macro" }
+liquid-assets-inflate-macros = { version = "0.4.0" }
