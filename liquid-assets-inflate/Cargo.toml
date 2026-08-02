@@ -9,6 +9,7 @@ repository = "https://github.com/tom-flaherty/liquid-assets"
 license = "MIT"
 readme = "README.md"
 keywords = ["embedded", "graphics", "assets", "pipeline", "compression"]
+categories = ["embedded", "no-std"]
 
 [dependencies]
 liquid-assets-inflate-macros = { version = "0.4.0" }
