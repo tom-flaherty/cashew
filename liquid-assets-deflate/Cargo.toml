@@ -1,9 +1,9 @@
 [package]
 name = "liquid-assets-deflate"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 
-description = "compress graphical assets at compile time for embedded targets which can be decompressed on target using liquid-assets-inflate"
+description = "Compress graphical assets at compile time for embedded targets which can be decompressed on target using liquid-assets-inflate"
 homepage = "https://github.com/tom-flaherty/liquid-assets"
 repository = "https://github.com/tom-flaherty/liquid-assets"
 license = "MIT"
