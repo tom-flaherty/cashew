@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "liquid-assets-deflate"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "image",
  "miniz_oxide 0.9.1",
@@ -445,14 +445,28 @@ dependencies = [
 
 [[package]]
 name = "liquid-assets-inflate"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
- "liquid-assets-inflate-proc-macro",
+ "liquid-assets-inflate-macros 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
-name = "liquid-assets-inflate-proc-macro"
-version = "0.3.1"
+name = "liquid-assets-inflate-macros"
+version = "0.4.0"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "liquid-assets-inflate-macros"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "870422f39e5ed666d2620c6699f64204158337c80367e7a2cf076c134c53a40e"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",

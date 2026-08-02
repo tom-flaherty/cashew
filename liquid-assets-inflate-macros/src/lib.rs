@@ -278,7 +278,7 @@ fn define_module_types() -> proc_macro2::TokenStream {
         }
         impl StaticAsset {
             #[doc = "Get the compressed data as a slice"]
-            pub const fn get_comressed_data(&self) -> &'static [u8] {
+            pub const fn get_compressed_data(&self) -> &'static [u8] {
                 self.data
             }
             #[doc = "Get the width of the image in pixels"]
@@ -323,11 +323,11 @@ fn define_module_types() -> proc_macro2::TokenStream {
                 self.frames.len()
             }
             #[doc = "Get the width of the frames in pixels"]
-            pub fn width(&self) -> u16 {
+            pub const fn width(&self) -> u16 {
                 self.width
             }
             #[doc = "Get the height of the frames in pixels"]
-            pub fn height(&self) -> u16 {
+            pub const fn height(&self) -> u16 {
                 self.height
             }
             #[doc = "Decompress a single frame into a buffer by passing a Decompressor. Returns an error if the frame is out of range"]
@@ -366,11 +366,11 @@ fn define_module_types() -> proc_macro2::TokenStream {
                 }
             }
             #[doc = "Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote"]
-            pub fn copy_compressed_frame_data_to_buffer<D: Decompressor>(
+            pub fn copy_compressed_frame_data_to_buffer(
                 &self,
                 frame_number: usize,
                 buffer: &mut [u8; N],
-            ) -> Result<usize, Error<<D as Decompressor>::Error>> {
+            ) -> Result<usize, Error<()>> {
                 if frame_number < self.frames.len() {
                     let source_bytes = self.frames[frame_number as usize];
                     buffer[..source_bytes.len()].copy_from_slice(source_bytes);

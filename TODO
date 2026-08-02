@@ -1,0 +1,5 @@
+Add support for transparency.
+Add support for colour formats other than RGB565.
+Prevent unwanted rebuilds
+Only rebuild the specific assets that changed (this would add a lot of complexity)
+Support for manual assets builds (doesn't use build.rs)

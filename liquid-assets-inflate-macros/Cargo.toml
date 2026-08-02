@@ -1,0 +1,21 @@
+[package]
+name = "liquid-assets-inflate-macros"
+version = "0.4.0"
+edition = "2024"
+
+description = "macros used by liquid-assets-inflate"
+homepage = "https://github.com/tom-flaherty/liquid-assets"
+repository = "https://github.com/tom-flaherty/liquid-assets"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+proc-macro-error = "1.0.4"
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+syn = { version = "2.0.117", features = ["full"] }
+
+[lib]
+proc-macro = true

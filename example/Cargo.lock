@@ -1231,7 +1231,9 @@ checksum = "2b23ac50abb8261cb38c6e2a7192d3302e0836dac1628f6a93b82b4fad185897"
 
 [[package]]
 name = "liquid-assets-deflate"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f71d8647652554a395c5f20c14489668ff056663d94b97cb62403166b88900e"
 dependencies = [
  "image",
  "serde",
@@ -1242,14 +1244,18 @@ dependencies = [
 
 [[package]]
 name = "liquid-assets-inflate"
-version = "0.3.1"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5a4b48d8fa18f8b23b7c33c5d81a1579347f96cbb2c07b2d7db0e2973352775"
 dependencies = [
- "liquid-assets-inflate-proc-macro",
+ "liquid-assets-inflate-macros",
 ]
 
 [[package]]
-name = "liquid-assets-inflate-proc-macro"
-version = "0.3.1"
+name = "liquid-assets-inflate-macros"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "870422f39e5ed666d2620c6699f64204158337c80367e7a2cf076c134c53a40e"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",

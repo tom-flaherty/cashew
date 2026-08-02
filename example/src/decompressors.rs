@@ -1,7 +1,7 @@
 use liquid_assets_inflate::Decompressor;
 
 #[allow(unused)]
-pub struct MinizOxideDecompressor {}
+pub struct MinizOxideDecompressor;
 impl Decompressor for MinizOxideDecompressor {
     type Error = miniz_oxide::inflate::TINFLStatus;
 
@@ -20,7 +20,7 @@ impl Decompressor for MinizOxideDecompressor {
 }
 
 #[allow(unused)]
-pub struct LzssDecompressor {}
+pub struct LzssDecompressor;
 impl Decompressor for LzssDecompressor {
     type Error = lzss::LzssError<void::Void, lzss::SliceWriteError>;
 
@@ -39,7 +39,7 @@ impl Decompressor for LzssDecompressor {
 }
 
 #[allow(unused)]
-pub struct NoDecompressor {}
+pub struct NoDecompressor;
 impl Decompressor for NoDecompressor {
     type Error = ();
 
