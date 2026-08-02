@@ -46,9 +46,11 @@ Example layout with 4 static assets and 2 animations:
 
 ## Compressing assets using `liquid-assets-deflate`
 
-Firstly, a compression method must be implemented in `build.rs` using the `Compressor` trait.
+Firstly, add `liquid-assets-deflate` to the `[dev-dependencies]` section of your Cargo.toml.
+
+A compression method must be implemented in `build.rs` using the `Compressor` trait.
 There are some [example implementations](https://github.com/tom-flaherty/liquid-assets/blob/master/example/build.rs) provided for the [miniz oxide](https://crates.io/crates/miniz_oxide) compression library, the [lzss](https://crates.io/crates/lzss) compression library, and a no-compression implementation.
-In most cases 
+In most cases one of the example implementation can be copied.
 The trait simply wraps a compression library.
 
 ```rust
@@ -100,6 +102,8 @@ The user can also force the assets to be rebuilt: `REBUILD_ASSETS=1 cargo run`
 ## Decompressing assets using `liquid-assets-inflate`
 
 The biggest timesaver when using `liquid-assets` is in the decompression of the assets.
+
+Firstly, add `liquid-assets-inflate` to the `[dependencies]` section of your Cargo.toml.
 
 First, the user must implement the `Decompressor` trait, using the same compression library as for the `Compressor` trait implementation.
 There are some [example](https://github.com/tom-flaherty/liquid-assets/blob/master/example/src/decompressors.rs) implementation of the `Decompressor` traits, which can be copied for other projects.
@@ -154,7 +158,7 @@ In summary, the module contains the following:
 The following methods are implemented for `StaticAsset`:
 
 ```rust
-pub const fn get_comressed_data(&self) -> &'static [u8] { ... }
+pub const fn get_compressed_data(&self) -> &'static [u8] { ... }
 ```
 
 Get a static reference to the compressed data.
@@ -346,12 +350,21 @@ fn example() {
 
 - If another part of build.rs needs to be reran then all the assets will be recompiled, which adds to compile time.
 - For projects with lots of assets, it's better to use external flash memory rather than including the assets in the main binary, as the binary size will bloat and cause long flash times.
+- Only tested on Linux for ESP32 targets.
 
-## What about text?
+## What about compressing fonts?
 
-This crate doesn't support text as there are already crates which do this effectively.
+This crate doesn't support fonts as there are already crates which do this effectively.
 The `embedded-graphics` library includes some mono-space fonts.
 For non-mono text, [minitype](https://crates.io/crates/minitype) can be used to generate bitmaps from font files.
+
+## Licence
+
+This software is provided under the MIT Licence (see LICENCE file). If you find this project helpful, please give the repo a star.
+
+## Contributing
+
+Please raise an issue on Github to discuss changes.
 
 ## Appendix
 
@@ -573,7 +586,17 @@ pub mod assets {
     pub const fn get_all_animated_assets() -> &'static [&'static AnimatedAsset<
         { super::BUFFER_SIZE },
     >] {
-        &[&CONNECTED, &LOADING].as_slice()
+        &[&CONNECTION_SUCCESS, &LOADING].as_slice()
     }
 }
 ```
+
+### Converting GIF to frames
+
+You can convert a gif to frames using:
+
+`ffmpeg -i mygif.gif frame_%04d.png`
+
+Or to also resize:
+
+`ffmpeg -i mygif.gif -vf scale=128:128 frame_%04d.png`
