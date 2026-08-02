@@ -17,6 +17,7 @@ These conditions must be met:
 - The naming of the frame images is pretty flexible, but must end with the frame number.
 - The first frame must be frame 1 (not frame 0!).
 - There cannot be any missing frame numbers.
+- All animation frames must have the same resolution
 
 Example layout with 4 static assets and 2 animations:
 
@@ -134,7 +135,7 @@ liquid_assets_inflate::include_assets!("asset-binaries", BUFFER_SIZE);
 ```
 
 This macro will generate a module called `assets`, which contains all the compressed data stored as `const`.
-To see exactly what this will module look like, please see the appendix.
+To see what this will module will expand to, please see the appendix.
 
 In summary, the module contains the following:
 
@@ -152,18 +153,189 @@ In summary, the module contains the following:
 
 The following methods are implemented for `StaticAsset`:
 
-| Method                         | Parameters                                                                                                    | Return Type                                                  | Usage                                                                                      |
+```rust
+pub const fn get_comressed_data(&self) -> &'static [u8] { ... }
+```
+
+Get a static reference to the compressed data.
+
+```rust
+pub const fn width(&self) -> u16 { self.width }
+```
+
+Get the width of the image in pixels.
+
+```rust
+pub const fn height(&self) -> u16 { self.height }
+```
+
+Get the height of the image in pixels.
+
+```rust
+pub fn decompress<const N: usize, D: Decompressor>(
+    &self,
+    buffer: &mut [u8; N],
+    decompressor: &D,
+) -> Result<DecompressedData, Error<<D as Decompressor>::Error>> { /* ... */ }
+```
+
+Decompress the static asset into the the decompression buffer, using a reference to the struct implementing the `Decompressor` trait.
+If successful it will return a `DecompressedData` struct, which contains the number of bytes written to the buffer (starting from the first byte), the image width and the image height.
+
+<!-- | Method                         | Parameters                                                                                                    | Return Type                                                  | Usage                                                                                      |
 |--------------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | `const fn get_compressed_data` | N/A                                                                                                           | `&'static [u8]`                                              | Returns slice of bytes for the compressed data for the asset                               |
 | `const fn width`               | N/A                                                                                                           | `u16`                                                        | Returns the width of the image in pixels                                                   |
 | `const fn height`              | N/A                                                                                                           | `u16`                                                        | Returns the height of the image in pixels                                                  |
-| `fn decompress`                | Mutable reference to the decompression buffer, reference to the struct implementing the `Decompressor` trait` | `Result<DecompressedData, Error<<D as Decompressor>::Error>` | Attempts to decompresses the asset and return a `DecompressedData`. May return an `Error`` |
+| `fn decompress`                | Mutable reference to the decompression buffer, reference to the struct implementing the `Decompressor` trait` | `Result<DecompressedData, Error<<D as Decompressor>::Error>` | Attempts to decompresses the asset and return a `DecompressedData`. May return an `Error`` | -->
 
 ### `AnimatedAsset` overview
 
 The following methods are implemented for `AnimatedAsset`:
 
+```rust
+pub const fn get_number_of_frames(&self) -> usize { self.frames.len() }
+```
 
+Get the number of frames in the animation.
+
+```rust
+pub const fn width(&self) -> u16 { self.width }
+```
+
+Get the width of the animation frames in pixels.
+
+```rust
+pub const fn height(&self) -> u16 { self.height }
+```
+
+Get the height of the animation frames in pixels.
+
+```rust
+pub fn decompress_frame<D: Decompressor>(
+    &self,
+    frame_number: usize,
+    buffer: &mut [u8; N],
+    decompressor: &D,
+) -> Result<usize, Error<<D as Decompressor>::Error>> { ... }
+```
+
+Decompress a specific animation frame into the decompression buffer.
+The first frame is 0.
+Requires a mutable reference to the decompression buffer, and a reference to the struct implementing the `Decompressor` trait.
+
+```rust
+pub fn get_compressed_frame_data(
+    &self,
+    frame_number: usize,
+) -> Result<&'static [u8], Error<()>> { ... }
+```
+
+Get the compressed data for a single frame.
+The first frame is 0.
+
+```rust
+pub fn copy_compressed_frame_data_to_buffer<D: Decompressor>(
+    &self,
+    frame_number: usize,
+    buffer: &mut [u8; N],
+) -> Result<usize, Error<<D as Decompressor>::Error>> { ... }
+```
+
+Copy the compressed frame data into the buffer.
+If successful, returns the number of bytes written to the buffer.
+
+```rust
+pub fn as_iter(&self) -> FrameIterator { ... }
+```
+
+Access the animation frames as a `FrameIterator`.
+
+### Example
+
+You can see a proper [example](https://github.com/tom-flaherty/liquid-assets/tree/master/example) on the Github page.
+A rough example can be seen below:
+
+```rust
+#![no_std]
+const BUFFER_SIZE: usize = 135 * 135 * 2; // width * height * bytes per pixel
+liquid_assets_inflate::include_assets!("asset-binaries", BUFFER_SIZE);
+pub struct MinizOxideDecompressor {}
+impl Decompressor for MinizOxideDecompressor { ... }
+
+fn example() {
+    let decompressor = MinizOxideDecompressor {};
+
+    // Setup the display here (see the Github example)
+
+    // Decompress a static asset
+    let DecompressedData {
+        bytes_wrote,
+        width,
+        height: _,
+    } = assets::COMPANY_LOGO
+        .decompress(&mut buffer, &decompressor)
+        .expect("Decompression failed");
+    // The data is now in the buffer. It's up to the user to push this data to the display driver
+    // Some display drivers support using embedded_graphics::image::Image
+    let image_raw = embedded_graphics::image::ImageRaw::<Rgb565>::new(
+        &frame_buffer[0..bytes_wrote],
+        width as u32,
+    );
+    let image = embedded_graphics::image::Image::new(&image_raw, Point { x: 0, y: 0 });
+    image.draw(&mut display).unwrap();
+
+    delay.delay(Duration::from_secs(1));
+
+    // Loop over an animation
+    for frame_number in 0..assets::LOADING.get_number_of_frames() {
+        let DecompressedData { .. } = assets::LOADING
+            .decompress_frame(frame_number, &mut buffer, &decompressor)
+            .expect("Decompression failed");
+        
+        // The data can be displayed
+        
+        // Note that the decompression time is unpredicatable, so for smoother animations
+        // don't use a fixed delay like this
+        delay.delay(Duration::from_millis(50));
+    }
+
+    // Iterate over an animation using a FrameIterator
+    for (frame_number, frame) in assets::LOADING.as_iter().enumerate() {
+        let frame_start_time = Instant::now();
+        rprint!("Frame no. {} ", frame_number);
+
+        let decompression_start_time = Instant::now();
+        let DecompressedData {
+            bytes_wrote, width, ..
+        } = frame.decompress(&mut frame_buffer, &decompressor).unwrap();
+        rprint!("Decomp. in {} ", decompression_start_time.elapsed());
+
+        // Now it's up to the user to display the decompressed data
+        // The mipidsi driver used in this example is compatible with embedded_graphics::Image
+
+        let image_raw = embedded_graphics::image::ImageRaw::<Rgb565>::new(
+            &frame_buffer[0..bytes_wrote],
+            width as u32,
+        );
+        let image = embedded_graphics::image::Image::new(&image_raw, Point { x: 0, y: 0 });
+
+        let draw_start = Instant::now();
+        image.draw(&mut display).unwrap();
+        rprint!("Draw time {} ", draw_start.elapsed());
+
+        // Delay to maintain framerate
+        delay.delay(
+            desired_frame_time
+                .checked_sub(frame_start_time.elapsed())
+                .unwrap_or(Duration::from_millis(0)),
+        );
+
+        rprintln!("Frame Time {}", frame_start_time.elapsed());
+    }
+}
+
+```
 
 ## What are the advantages of using this library?
 
@@ -212,19 +384,19 @@ pub mod assets {
         height: u16,
     }
     impl StaticAsset {
-        ///Get the compressed data as a slice
-        pub const fn get_comressed_data(&self) -> &'static [u8] {
+        /// Get the compressed data as a slice
+        pub const fn get_compressed_data(&self) -> &'static [u8] {
             self.data
         }
-        ///Get the width of the image in pixels
+        /// Get the width of the image in pixels
         pub const fn width(&self) -> u16 {
             self.width
         }
-        ///Get the height of the image in pixels
+        /// Get the height of the image in pixels
         pub const fn height(&self) -> u16 {
             self.height
         }
-        ///Decompress the asset to the buffer by passing a Decompressor
+        /// Decompress the asset to the buffer by passing a Decompressor
         pub fn decompress<const N: usize, D: Decompressor>(
             &self,
             buffer: &mut [u8; N],
@@ -246,26 +418,26 @@ pub mod assets {
             })
         }
     }
-    ///An animated asset, which is a collection of frames (images) with the same dimensions
+    /// An animated asset, which is a collection of frames (images) with the same dimensions
     pub struct AnimatedAsset<const N: usize> {
         frames: &'static [&'static [u8]],
         width: u16,
         height: u16,
     }
     impl<const N: usize> AnimatedAsset<N> {
-        ///Get the total number of frames in the animation
+        /// Get the total number of frames in the animation
         pub const fn get_number_of_frames(&self) -> usize {
             self.frames.len()
         }
-        ///Get the width of the frames in pixels
-        pub fn width(&self) -> u16 {
+        /// Get the width of the frames in pixels
+        pub const fn width(&self) -> u16 {
             self.width
         }
-        ///Get the height of the frames in pixels
-        pub fn height(&self) -> u16 {
+        /// Get the height of the frames in pixels
+        pub const fn height(&self) -> u16 {
             self.height
         }
-        ///Decompress a single frame into a buffer by passing a Decompressor. Returns an error if the frame is out of range
+        /// Decompress a single frame into a buffer by passing a Decompressor. Returns an error if the frame is out of range
         pub fn decompress_frame<D: Decompressor>(
             &self,
             frame_number: usize,
@@ -290,7 +462,7 @@ pub mod assets {
                 height: self.height,
             })
         }
-        ///Get the compressed data for a frame. Retuns error if the frame is out of range
+        /// Get the compressed data for a frame. Retuns error if the frame is out of range
         pub fn get_compressed_frame_data(
             &self,
             frame_number: usize,
@@ -301,7 +473,7 @@ pub mod assets {
                 Err(Error::FrameOutOfRange)
             }
         }
-        ///Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote
+        /// Copy the compressed frame data into the buffer. Returns an error if the frame is out of range. On success, returns the number of bytes wrote
         pub fn copy_compressed_frame_data_to_buffer<D: Decompressor>(
             &self,
             frame_number: usize,
@@ -315,12 +487,12 @@ pub mod assets {
                 Err(Error::FrameOutOfRange)
             }
         }
-        ///Access the animation as a FrameIterator (this method uses references so doesn't duplicate data)
+        /// Access the animation as a FrameIterator (this method uses references so doesn't duplicate data)
         pub fn as_iter(&self) -> FrameIterator {
             FrameIterator::new(self.frames, self.width, self.height)
         }
     }
-    ///Access the animation as a FrameIterator. This returns each frame in the animation as a static asset. Can be used with the syntax `for frame in assets::ANIMATION.as_iter() {...}`
+    /// Access the animation as a FrameIterator. This returns each frame in the animation as a static asset. Can be used with the syntax `for frame in assets::ANIMATION.as_iter() {...}`
     pub struct FrameIterator {
         frames: &'static [&'static [u8]],
         width: u16,
@@ -393,11 +565,11 @@ pub mod assets {
         width: 128u16,
         height: 128u16,
     };
-    ///Retuns a slice containing all StaticAsset structs defined in the assets module
+    /// Retuns a slice containing all StaticAsset structs defined in the assets module
     pub const fn get_all_static_assets() -> &'static [&'static StaticAsset] {
-        &[&COMPANY_LOGO, WARNING, CONNECTED, DISCONNECTED].as_slice()
+        &[&COMPANY_LOGO, &WARNING, &CONNECTED, &DISCONNECTED].as_slice()
     }
-    ///Returns a slice containing all AnimatedAsset structs defined in the assets module
+    /// Returns a slice containing all AnimatedAsset structs defined in the assets module
     pub const fn get_all_animated_assets() -> &'static [&'static AnimatedAsset<
         { super::BUFFER_SIZE },
     >] {
